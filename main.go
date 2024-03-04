@@ -1,15 +1,26 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
+	"github.com/sacloud/iaas-api-go"
+	"github.com/sacloud/iaas-api-go/types"
+	"github.com/sacloud/iaas-service-go/dns"
 )
 
 var GroupName = os.Getenv("GROUP_NAME")
@@ -25,25 +36,25 @@ func main() {
 	// webhook, where the Name() method will be used to disambiguate between
 	// the different implementations.
 	cmd.RunWebhookServer(GroupName,
-		&customDNSProviderSolver{},
+		&sakuraCloudDNSProviderSolver{},
 	)
 }
 
-// customDNSProviderSolver implements the provider-specific logic needed to
+// sakuraCloudDNSProviderSolver implements the provider-specific logic needed to
 // 'present' an ACME challenge TXT record for your own DNS provider.
 // To do so, it must implement the `github.com/cert-manager/cert-manager/pkg/acme/webhook.Solver`
 // interface.
-type customDNSProviderSolver struct {
+type sakuraCloudDNSProviderSolver struct {
 	// If a Kubernetes 'clientset' is needed, you must:
 	// 1. uncomment the additional `client` field in this structure below
 	// 2. uncomment the "k8s.io/client-go/kubernetes" import at the top of the file
 	// 3. uncomment the relevant code in the Initialize method below
 	// 4. ensure your webhook's service account has the required RBAC role
 	//    assigned to it for interacting with the Kubernetes APIs you need.
-	//client kubernetes.Clientset
+	client kubernetes.Interface
 }
 
-// customDNSProviderConfig is a structure that is used to decode into when
+// sakuraCloudDNSProviderConfig is a structure that is used to decode into when
 // solving a DNS01 challenge.
 // This information is provided by cert-manager, and may be a reference to
 // additional configuration that's needed to solve the challenge for this
@@ -57,7 +68,7 @@ type customDNSProviderSolver struct {
 // You should not include sensitive information here. If credentials need to
 // be used by your provider here, you should reference a Kubernetes Secret
 // resource and fetch these credentials using a Kubernetes clientset.
-type customDNSProviderConfig struct {
+type sakuraCloudDNSProviderConfig struct {
 	// Change the two fields below according to the format of the configuration
 	// to be decoded.
 	// These fields will be set by users in the
@@ -65,6 +76,24 @@ type customDNSProviderConfig struct {
 
 	//Email           string `json:"email"`
 	//APIKeySecretRef v1alpha1.SecretKeySelector `json:"apiKeySecretRef"`
+	ZoneID               int64                    `json:"zoneID"`
+	AccessTokenRef       cmmeta.SecretKeySelector `json:"accessTokenRef"`
+	AccessTokenSecretRef cmmeta.SecretKeySelector `json:"accessTokenSecretRef"`
+}
+
+func (c *sakuraCloudDNSProviderSolver) newClient(cfg *sakuraCloudDNSProviderConfig, ch *v1alpha1.ChallengeRequest) (*dns.Service, error) {
+	accessToken, err := c.getSecretString(&cfg.AccessTokenRef, ch.ResourceNamespace)
+	if err != nil {
+		return nil, err
+	}
+	accessTokenSecret, err := c.getSecretString(&cfg.AccessTokenSecretRef, ch.ResourceNamespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return dns.New(
+		iaas.NewClient(accessToken, accessTokenSecret),
+	), nil
 }
 
 // Name is used as the name for this DNS solver when referencing it on the ACME
@@ -73,8 +102,8 @@ type customDNSProviderConfig struct {
 // solvers configured with the same Name() **so long as they do not co-exist
 // within a single webhook deployment**.
 // For example, `cloudflare` may be used as the name of a solver.
-func (c *customDNSProviderSolver) Name() string {
-	return "my-custom-solver"
+func (c *sakuraCloudDNSProviderSolver) Name() string {
+	return "sakuracloud-dns-solver"
 }
 
 // Present is responsible for actually presenting the DNS record with the
@@ -82,17 +111,80 @@ func (c *customDNSProviderSolver) Name() string {
 // This method should tolerate being called multiple times with the same value.
 // cert-manager itself will later perform a self check to ensure that the
 // solver has correctly configured the DNS provider.
-func (c *customDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
+func (c *sakuraCloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
 		return err
 	}
 
-	// TODO: do something more useful with the decoded configuration
-	fmt.Printf("Decoded configuration %v", cfg)
+	client, err := c.newClient(&cfg, ch)
+	if err != nil {
+		return err
+	}
+	zone, err := client.Read(&dns.ReadRequest{
+		ID: types.Int64ID(cfg.ZoneID),
+	})
+	if err != nil {
+		return err
+	}
 
-	// TODO: add code that sets a record in the DNS provider's console
-	return nil
+	entry, err := c.getEntry(ch, zone)
+	if err != nil {
+		return err
+	}
+	klog.V(6).Infof("present for entry=%s, zone=%s", entry, zone.Name)
+
+	records := zone.GetRecords()
+	isExists := false
+	for _, record := range records {
+		if record.Name == entry && record.Type == types.DNSRecordTypes.TXT {
+			record.RData = ch.Key
+			isExists = true
+			break
+		}
+	}
+	if !isExists {
+		records.Add(&iaas.DNSRecord{
+			Name:  entry,
+			Type:  types.DNSRecordTypes.TXT,
+			RData: ch.Key,
+			TTL:   60,
+		})
+	}
+	_, err = client.Update(&dns.UpdateRequest{
+		ID:           zone.ID,
+		Records:      records,
+		SettingsHash: zone.SettingsHash,
+	})
+	return err
+}
+
+func (c *sakuraCloudDNSProviderSolver) getEntry(ch *v1alpha1.ChallengeRequest, zone *iaas.DNS) (string, error) {
+	zoneName := zone.Name
+	if zoneName[len(zoneName)-1] != '.' {
+		zoneName += "."
+	}
+	if !strings.HasSuffix(ch.ResolvedZone, zoneName) {
+		return "", errors.New("invalid zone")
+	}
+
+	entry, ok := strings.CutSuffix(ch.ResolvedFQDN, zoneName)
+	if !ok {
+		return "", errors.New("invalid fqdn")
+	}
+	return entry, nil
+}
+
+func (c *sakuraCloudDNSProviderSolver) getSecretString(ref *cmmeta.SecretKeySelector, ns string) (string, error) {
+	secret, err := c.client.CoreV1().Secrets(ns).Get(context.TODO(), ref.Name, v1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	if accessToken, ok := secret.Data[ref.Key]; ok {
+		return string(accessToken), nil
+	}
+	return "", errors.New("accessToken not found")
 }
 
 // CleanUp should delete the relevant TXT record from the DNS provider console.
@@ -101,8 +193,46 @@ func (c *customDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 // value provided on the ChallengeRequest should be cleaned up.
 // This is in order to facilitate multiple DNS validations for the same domain
 // concurrently.
-func (c *customDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
-	// TODO: add code that deletes a record from the DNS provider's console
+func (c *sakuraCloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
+	cfg, err := loadConfig(ch.Config)
+	if err != nil {
+		return err
+	}
+
+	client, err := c.newClient(&cfg, ch)
+	if err != nil {
+		return err
+	}
+	zone, err := client.Read(&dns.ReadRequest{
+		ID: types.Int64ID(cfg.ZoneID),
+	})
+	if err != nil {
+		return err
+	}
+
+	entry, err := c.getEntry(ch, zone)
+	if err != nil {
+		return err
+	}
+
+	records := zone.GetRecords()
+	isExists := false
+	records = slices.DeleteFunc(records, func(d *iaas.DNSRecord) bool {
+		if d.Name == entry && d.Type == types.DNSRecordTypes.TXT {
+			isExists = true
+			return true
+		}
+		return false
+	})
+	if isExists {
+		klog.V(6).Infof("cleanup for entry=%s, zone=%s", entry, zone.Name)
+		_, err = client.Update(&dns.UpdateRequest{
+			ID:           zone.ID,
+			Records:      records,
+			SettingsHash: zone.SettingsHash,
+		})
+		return err
+	}
 	return nil
 }
 
@@ -115,25 +245,20 @@ func (c *customDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 // provider accounts.
 // The stopCh can be used to handle early termination of the webhook, in cases
 // where a SIGTERM or similar signal is sent to the webhook process.
-func (c *customDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
-	///// UNCOMMENT THE BELOW CODE TO MAKE A KUBERNETES CLIENTSET AVAILABLE TO
-	///// YOUR CUSTOM DNS PROVIDER
+func (c *sakuraCloudDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
+	cl, err := kubernetes.NewForConfig(kubeClientConfig)
+	if err != nil {
+		return err
+	}
 
-	//cl, err := kubernetes.NewForConfig(kubeClientConfig)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//c.client = cl
-
-	///// END OF CODE TO MAKE KUBERNETES CLIENTSET AVAILABLE
+	c.client = cl
 	return nil
 }
 
 // loadConfig is a small helper function that decodes JSON configuration into
 // the typed config struct.
-func loadConfig(cfgJSON *extapi.JSON) (customDNSProviderConfig, error) {
-	cfg := customDNSProviderConfig{}
+func loadConfig(cfgJSON *extapi.JSON) (sakuraCloudDNSProviderConfig, error) {
+	cfg := sakuraCloudDNSProviderConfig{}
 	// handle the 'base case' where no configuration has been provided
 	if cfgJSON == nil {
 		return cfg, nil
