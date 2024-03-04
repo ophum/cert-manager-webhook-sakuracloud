@@ -1,58 +1,105 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/cert-manager/cert-manager/d53c0b9270f8cd90d908460d69502694e1838f5f/logo/logo-small.png" height="256" width="256" alt="cert-manager project logo" />
-</p>
+# cert-manager ACME dns01 webhook solver for sakuracloud
 
-# ACME webhook example
+※ 非公式です。
 
-The ACME issuer type supports an optional 'webhook' solver, which can be used
-to implement custom DNS01 challenge solving logic.
+[cert-manager/webhook-example](https://github.com/cert-manager/webhook-example)をフォークしさくらのクラウド向けに実装しました。
 
-This is useful if you need to use cert-manager with a DNS provider that is not
-officially supported in cert-manager core.
+## Usage
 
-## Why not in core?
+ここでは nemaspace 毎に issuer を設定する方法を記述します。
 
-As the project & adoption has grown, there has been an influx of DNS provider
-pull requests to our core codebase. As this number has grown, the test matrix
-has become un-maintainable and so, it's not possible for us to certify that
-providers work to a sufficient level.
+1. cert-manager をデプロイします。
 
-By creating this 'interface' between cert-manager and DNS providers, we allow
-users to quickly iterate and test out new integrations, and then packaging
-those up themselves as 'extensions' to cert-manager.
+[cert-manager: installation/helm](https://cert-manager.io/docs/installation/helm/)
 
-We can also then provide a standardised 'testing framework', or set of
-conformance tests, which allow us to validate the a DNS provider works as
-expected.
-
-## Creating your own webhook
-
-Webhook's themselves are deployed as Kubernetes API services, in order to allow
-administrators to restrict access to webhooks with Kubernetes RBAC.
-
-This is important, as otherwise it'd be possible for anyone with access to your
-webhook to complete ACME challenge validations and obtain certificates.
-
-To make the set up of these webhook's easier, we provide a template repository
-that can be used to get started quickly.
-
-### Creating your own repository
-
-### Running the test suite
-
-All DNS providers **must** run the DNS01 provider conformance testing suite,
-else they will have undetermined behaviour when used with cert-manager.
-
-**It is essential that you configure and run the test suite when creating a
-DNS01 webhook.**
-
-An example Go test file has been provided in [main_test.go](https://github.com/cert-manager/webhook-example/blob/master/main_test.go).
-
-You can run the test suite with:
-
-```bash
-$ TEST_ZONE_NAME=example.com. make test
+```
+helm repo add jetstack https://charts.jetstack.io --force-update
+helm repo update
+helm install \
+  cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --create-namespace \
+  --version v1.14.3 \
+  --set installCRDs=true
 ```
 
-The example file has a number of areas you must fill in and replace with your
-own options in order for tests to pass.
+2. cert-manager-webhook-sakuracloud をデプロイします。
+
+```
+git clone https://github.com/ophum/cert-manager-webhook-sakuracloud.git
+cd cert-manager-webhook-sakuracloud
+helm install --namespace cert-manager \
+  cert-manager-webhook-sakuracloud \
+  ./deploy/cert-manager-webhook-sakuracloud
+```
+
+3. issuer を設定します。
+
+issuer で使うさくらのクラウドの API キーを作成します。
+
+```
+apiVersion: v1
+data:
+  accessToken: <アクセストークンのbase64>
+  accessTokenSecret: <アクセストークンシークレットのbase64>
+kind: Secret
+metadata:
+  name: sakuracloud-dns-credentials
+  namespace: example-ns
+type: Opaque
+```
+
+```
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: example-issuer
+  namespace: example-ns
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: user@example.com
+    privateKeySecretRef:
+      name: example-issuer-account-key
+    solvers:
+    - dns01:
+        webhook:
+          groupName: acme.t-inagaki.net
+          solverName: sakuracloud-dns-solver
+          config:
+            zoneID: <さくらのクラウドのDNSゾーンID>
+            accessTokenRef:
+              name: sakuracloud-dns-credentials
+              key: accessToken
+            accessTokenSecretRef:
+              name: sakuracloud-dns-credentials
+              key: accessTokenSecret
+```
+
+4. ingress の annotation で指定して証明書を作ります。
+
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/issuer: example-issuer
+  name: example-ingress
+  namespace: example-ns
+spec:
+  rules:
+  - host: example.<さくらのクラウドで管理するゾーン名>
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: myservice
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - example.<さくらのクラウドで管理するゾーン名>
+    secretName: example-ingress-cert
+```
