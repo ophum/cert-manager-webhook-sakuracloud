@@ -165,12 +165,12 @@ func (c *sakuraCloudDNSProviderSolver) getEntry(ch *v1alpha1.ChallengeRequest, z
 		zoneName += "."
 	}
 	if !strings.HasSuffix(ch.ResolvedZone, zoneName) {
-		return "", errors.New("invalid zone")
+		return "", fmt.Errorf("invalid zone, resolvedZone: %s, zoneName: %s", ch.ResolvedZone, zoneName)
 	}
 
 	entry, ok := strings.CutSuffix(ch.ResolvedFQDN, "."+zoneName)
 	if !ok {
-		return "", errors.New("invalid fqdn")
+		return "", fmt.Errorf("invalid fqdn, resolvedFQDN: %s, zoneName: %s", ch.ResolvedFQDN, zoneName)
 	}
 	return entry, nil
 }
