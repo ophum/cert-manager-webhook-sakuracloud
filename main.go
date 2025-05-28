@@ -207,6 +207,9 @@ func (c *sakuraCloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) er
 		ID: types.Int64ID(cfg.ZoneID),
 	})
 	if err != nil {
+		if iaas.IsNotFoundError(err) {
+			return nil
+		}
 		return err
 	}
 
