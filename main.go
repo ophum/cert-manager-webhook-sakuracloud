@@ -114,25 +114,29 @@ func (c *sakuraCloudDNSProviderSolver) Name() string {
 func (c *sakuraCloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
-		return err
+		klog.Error("failed to loadConfig", "error", err)
+		return errors.New("failed to loadConfig")
 	}
 
 	client, err := c.newClient(&cfg, ch)
 	if err != nil {
-		return err
+		klog.Error("failed to newClient", "error", err)
+		return errors.New("failed to newClient")
 	}
 	zone, err := client.Read(&dns.ReadRequest{
 		ID: types.Int64ID(cfg.ZoneID),
 	})
 	if err != nil {
-		return err
+		klog.Error("failed to read zone", "error", err)
+		return errors.New("failed to read zone")
 	}
 
 	entry, err := c.getEntry(ch, zone)
 	if err != nil {
-		return err
+		klog.Error("failed to getEntry", "error", err)
+		return errors.New("failed to getEntry")
 	}
-	klog.V(6).Infof("present for entry=%s, zone=%s", entry, zone.Name)
+	klog.Infof("present for entry=%s, zone=%s", entry, zone.Name)
 
 	records := zone.GetRecords()
 	isExists := false
@@ -156,7 +160,11 @@ func (c *sakuraCloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) er
 		Records:      records,
 		SettingsHash: zone.SettingsHash,
 	})
-	return err
+	if err != nil {
+		klog.Error("failed to update zone", "error", err)
+		return errors.New("failed to update zone")
+	}
+	return nil
 }
 
 func (c *sakuraCloudDNSProviderSolver) getEntry(ch *v1alpha1.ChallengeRequest, zone *iaas.DNS) (string, error) {
@@ -196,26 +204,32 @@ func (c *sakuraCloudDNSProviderSolver) getSecretString(ref *cmmeta.SecretKeySele
 func (c *sakuraCloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
-		return err
+		klog.Error("failed to loadConfig", "error", err)
+		return errors.New("failed to loadConfig")
 	}
 
 	client, err := c.newClient(&cfg, ch)
 	if err != nil {
-		return err
+		klog.Error("failed to newClient", "error", err)
+		return errors.New("failed to newClient")
 	}
 	zone, err := client.Read(&dns.ReadRequest{
 		ID: types.Int64ID(cfg.ZoneID),
 	})
 	if err != nil {
 		if iaas.IsNotFoundError(err) {
+			klog.Warning("zone is not found", "zoneID", cfg.ZoneID)
 			return nil
 		}
-		return err
+
+		klog.Error("failed to read zone", "error", err)
+		return errors.New("failed to read zone")
 	}
 
 	entry, err := c.getEntry(ch, zone)
 	if err != nil {
-		return err
+		klog.Error("failed to getEntry", "error", err)
+		return errors.New("failed to getEntry")
 	}
 
 	records := zone.GetRecords()
@@ -228,13 +242,17 @@ func (c *sakuraCloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) er
 		return false
 	})
 	if isExists {
-		klog.V(6).Infof("cleanup for entry=%s, zone=%s", entry, zone.Name)
+		klog.Infof("cleanup for entry=%s, zone=%s", entry, zone.Name)
 		_, err = client.Update(&dns.UpdateRequest{
 			ID:           zone.ID,
 			Records:      records,
 			SettingsHash: zone.SettingsHash,
 		})
-		return err
+		if err != nil {
+			klog.Error("failed to update zone", "error", err)
+			return errors.New("failed to update zone")
+		}
+		return nil
 	}
 	return nil
 }
