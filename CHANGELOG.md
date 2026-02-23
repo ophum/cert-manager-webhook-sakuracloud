@@ -2,6 +2,10 @@
 
 ## [v0.4.5](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.4...v0.4.5) - 2026-02-23
 - tagprを導入。arm64のビルドを高速化するためruns-onでubuntu-24.04-armを利用する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/9
+- イメージのタグにtagprで生成したタグを利用する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/11
+
+## [v0.4.5](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.4...v0.4.5) - 2026-02-23
+- tagprを導入。arm64のビルドを高速化するためruns-onでubuntu-24.04-armを利用する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/9
 
 ## [v0.4.4](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.3...v0.4.4) - 2026-02-23
 - Add multi-platform build support (linux/amd64, linux/arm64) by @AbeYuki in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/8
