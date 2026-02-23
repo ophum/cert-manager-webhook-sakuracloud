@@ -5,6 +5,11 @@
 - armのrunnerでビルドする by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/15
 - 次のバージョンを指定する (v0.4.5) by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/16
 
+## [v0.4.5](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.4...v0.4.5) - 2026-02-23
+- tagprを導入する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/13
+- armのrunnerでビルドする by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/15
+- 次のバージョンを指定する (v0.4.5) by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/16
+
 ## [v0.4.4](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.4...v0.4.4) - 2026-02-23
 
 ## [v0.4.4](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.3...v0.4.4) - 2026-02-23
