@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.7](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.6...v0.4.7) - 2026-02-23
+- Fix/actions by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/21
+
 ## [v0.4.6](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.5...v0.4.6) - 2026-02-23
 - fix actions by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/19
 
