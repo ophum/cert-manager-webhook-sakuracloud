@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.6](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.5...v0.4.6) - 2026-02-23
+- fix actions by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/19
+
 ## [v0.4.5](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.4...v0.4.5) - 2026-02-23
 - tagprを導入する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/13
 - armのrunnerでビルドする by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/15
