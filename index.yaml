@@ -2,6 +2,15 @@ apiVersion: v1
 entries:
   cert-manager-webhook-sakuracloud:
   - apiVersion: v1
+    appVersion: v0.4.4
+    created: "2026-02-23T06:53:07.991791666Z"
+    description: A Helm chart for Kubernetes
+    digest: 0246fb24def0c14e760de381861eadd3389f00a1fa5cc8b58b3538b3d6bc34cb
+    name: cert-manager-webhook-sakuracloud
+    urls:
+    - https://github.com/ophum/cert-manager-webhook-sakuracloud/releases/download/cert-manager-webhook-sakuracloud-0.4.4/cert-manager-webhook-sakuracloud-0.4.4.tgz
+    version: 0.4.4
+  - apiVersion: v1
     appVersion: v0.4.3
     created: "2026-02-19T13:52:25.813956488Z"
     description: A Helm chart for Kubernetes
@@ -55,4 +64,4 @@ entries:
     urls:
     - https://github.com/ophum/cert-manager-webhook-sakuracloud/releases/download/cert-manager-webhook-sakuracloud-0.2.0/cert-manager-webhook-sakuracloud-0.2.0.tgz
     version: 0.2.0
-generated: "2026-02-19T13:52:25.813986334Z"
+generated: "2026-02-23T06:53:07.991819357Z"
