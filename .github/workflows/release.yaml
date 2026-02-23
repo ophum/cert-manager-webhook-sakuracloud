@@ -117,7 +117,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.tagpr.outputs.tag }}
+            type=semver,pattern={{raw}},value=${{ needs.tagpr.outputs.tag }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
