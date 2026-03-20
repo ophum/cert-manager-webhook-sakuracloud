@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.8](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.7...v0.4.8) - 2026-03-20
+- get-entryでゾーンのチェック条件を修正する by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/23
+
 ## [v0.4.7](https://github.com/ophum/cert-manager-webhook-sakuracloud/compare/v0.4.6...v0.4.7) - 2026-02-23
 - Fix/actions by @ophum in https://github.com/ophum/cert-manager-webhook-sakuracloud/pull/21
 
